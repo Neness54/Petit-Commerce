@@ -1,1 +1,1 @@
-# Petit-Commerce
+# Petit Commerce
