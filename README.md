@@ -1,5 +1,8 @@
 # Petit Commerce
 
+[![Télécharger .EXE (Windows)](https://img.shields.io/badge/T%C3%A9l%C3%A9charger-.EXE%20(Windows)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Neness54/Petit-Commerce/releases/latest)
+[![Télécharger .APK (Android)](https://img.shields.io/badge/T%C3%A9l%C3%A9charger-.APK%20(Android)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Neness54/Petit-Commerce/releases/latest)
+
 Application de caisse et de gestion de stock hors-ligne, pensée pour les petits commerces (boucherie, charcuterie, traiteur...).
 
 100 % hors-ligne, interface en français, base de données SQLite locale.
