@@ -1,8 +1,11 @@
 use serde::Deserialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::str::FromStr;
+use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
+
+mod phone_server;
 
 /// Chemin du fichier de base de données
 #[tauri::command]
@@ -134,10 +137,34 @@ pub fn run() {
                 .add_migrations("sqlite:petit-commerce.db", migrations)
                 .build(),
         )
+        .setup(|app| {
+            // Serveur local pour le scanner téléphone (démarré à la demande)
+            app.manage(Arc::new(phone_server::PhoneServer::new()));
+
+            // Démarrage automatique pour les tests (PC_SCANNER_AUTOSTART=1)
+            if std::env::var("PC_SCANNER_AUTOSTART").ok().as_deref() == Some("1") {
+                let handle = app.handle().clone();
+                let srv = app
+                    .state::<Arc<phone_server::PhoneServer>>()
+                    .inner()
+                    .clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = phone_server::start(handle, srv).await;
+                });
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             database_path,
             restore_database,
-            execute_transaction
+            execute_transaction,
+            phone_server::phone_start,
+            phone_server::phone_stop,
+            phone_server::phone_info,
+            phone_server::phone_new_code,
+            phone_server::phone_revoke,
+            phone_server::phone_set_panier,
+            phone_server::phone_scan_reply
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de l'application");

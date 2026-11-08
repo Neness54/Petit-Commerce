@@ -1,0 +1,204 @@
+==========================================================
+  PETIT COMMERCE - METTRE A JOUR LE LOGICIEL SUR GITHUB
+==========================================================
+
+Ce fichier explique comment publier une nouvelle version
+du logiciel sur GitHub, pour que le .exe soit téléchargeable
+par tout le monde.
+
+Dépôt : https://github.com/Neness54/Petit-Commerce
+Actions : https://github.com/Neness54/Petit-Commerce/actions
+Releases : https://github.com/Neness54/Petit-Commerce/releases
+
+
+----------------------------------------------------------
+REGLE D'OR
+----------------------------------------------------------
+Le numéro de version doit être IDENTIQUE dans ces 3 fichiers
+ET dans le tag Git. Sinon la release est créée avec un
+mauvais nom (ou en double).
+
+  1. package.json                  -> "version": "1.1.0"
+  2. src-tauri/Cargo.toml          -> version = "1.1.0"
+  3. src-tauri/tauri.conf.json     -> "version": "1.1.0"
+  4. le tag Git                    -> v1.1.0
+
+Format conseillé : MAJEUR.MINEUR.CORRECTIF
+  - correction de bug        -> 1.0.1
+  - nouvelle fonctionnalité  -> 1.1.0
+  - grosse refonte           -> 2.0.0
+
+
+----------------------------------------------------------
+ETAPE 1 - Tester le logiciel en local
+----------------------------------------------------------
+Toujours vérifier avant de publier :
+
+  cd /home/dorian/petit-commerce
+  npm run tauri dev
+
+Vérifie que l'application se lance et que les écrans
+modifiés fonctionnent.
+
+(Optionnel mais recommandé : faire un backup de la base
+depuis Paramètres -> Créer une sauvegarde.)
+
+
+----------------------------------------------------------
+ETAPE 2 - Choisir le nouveau numéro de version
+----------------------------------------------------------
+Exemple : la version actuelle est 1.0.0 et tu ajoutes
+une fonctionnalité -> nouvelle version = 1.1.0
+
+
+----------------------------------------------------------
+ETAPE 3 - Modifier les 3 fichiers de version
+----------------------------------------------------------
+Fichier 1 : package.json
+
+  {
+    "name": "petit-commerce",
+    "version": "1.1.0",
+    ...
+  }
+
+Fichier 2 : src-tauri/Cargo.toml
+
+  [package]
+  name = "petit-commerce"
+  version = "1.1.0"
+
+Fichier 3 : src-tauri/tauri.conf.json
+
+  {
+    "productName": "Ness.AML.DEV",
+    "version": "1.1.0",
+    ...
+  }
+
+Attention : le nom du fichier .exe sera construit à partir
+de "productName". Pour avoir "Ness.AML.DEV_1.1.0_x64-setup.exe",
+il faut "productName": "Ness.AML.DEV".
+
+
+----------------------------------------------------------
+ETAPE 4 - Enregistrer les modifications dans Git
+----------------------------------------------------------
+  cd /home/dorian/petit-commerce
+
+  git status
+  git add -A
+  git commit -m "Version 1.1.0 - description courte des changements"
+  git push origin main
+
+Si "git status" ne montre rien, c'est que tout est déjà
+commité : passe directement à l'étape 5.
+
+
+----------------------------------------------------------
+ETAPE 5 - Créer le tag et le pousser (c'est ça qui
+          déclenche la compilation Windows)
+----------------------------------------------------------
+  git tag v1.1.0
+  git push origin v1.1.0
+
+A partir de cet instant, GitHub Actions démarre tout seul.
+
+
+----------------------------------------------------------
+ETAPE 6 - Suivre la compilation
+----------------------------------------------------------
+Ouvre :
+  https://github.com/Neness54/Petit-Commerce/actions
+
+Le job "release-windows" doit passer du jaune au VERT.
+
+  - jaune  = compilation en cours (compter 10 à 20 min)
+  - vert   = réussi, la release est prête
+  - rouge  = erreur : clique sur le job pour lire le journal
+
+En cas d'échec, corrige le problème, puis :
+  - soit tu relances : bouton "Re-run all jobs"
+  - soit tu pousses une nouvelle version (1.1.1)
+
+
+----------------------------------------------------------
+ETAPE 7 - PUBLIER la release (étape indispensable !)
+----------------------------------------------------------
+Le workflow crée une release en BROUILLON : elle n'est PAS
+visible par les autres tant que tu ne la publies pas.
+
+  1. Va sur https://github.com/Neness54/Petit-Commerce/releases
+  2. Ouvre le brouillon "Petit Commerce v1.1.0"
+  3. Vérifie que le fichier .exe est bien présent :
+       Ness.AML.DEV_1.1.0_x64-setup.exe
+  4. Ajoute éventuellement le .apk Android (phase téléphone)
+  5. Clique sur "Publish release"
+
+Une fois publiée, le bouton "Télécharger .EXE" du README
+pointe automatiquement vers cette nouvelle version.
+
+
+----------------------------------------------------------
+ETAPE 8 - Vérifier le résultat
+----------------------------------------------------------
+  1. Ouvre la page Releases et télécharge le .exe
+  2. Installe-le sur un PC Windows
+  3. Vérifie que la version affichée est la bonne
+
+Le lien https://github.com/Neness54/Petit-Commerce/releases/latest
+pointe toujours vers la dernière version publiée.
+
+
+----------------------------------------------------------
+EN CAS DE PROBLEME
+----------------------------------------------------------
+
+A) J'ai fait une erreur dans le tag (mauvais numéro)
+
+  git tag -d v1.1.0                    (supprime en local)
+  git push origin :refs/tags/v1.1.0    (supprime sur GitHub)
+
+  Puis recommence l'étape 5 avec le bon numéro.
+  Pense aussi à supprimer la release brouillon créée
+  sur la page Releases.
+
+B) La compilation échoue
+
+  Regarde le journal du job en rouge sur la page Actions.
+  Les causes les plus fréquentes :
+    - package-lock.json non poussé (le workflow utilise npm ci)
+    - erreur TypeScript : lancer "npx tsc --noEmit" en local
+    - erreur Rust : lancer "cargo build" dans src-tauri
+
+C) Le tag est poussé mais rien ne se lance
+
+  Vérifie que le tag commence bien par "v" (v1.1.0 et non 1.1.0)
+  et que le fichier .github/workflows/release-windows.yml
+  est bien présent sur la branche main.
+
+D) Le .exe n'apparaît pas dans la release
+
+  Ouvre le brouillon et regarde la section "Assets".
+  S'il n'y a rien, la compilation a probablement échoué :
+  retourne sur la page Actions.
+
+E) Windows affiche "application inconnue" à l'installation
+
+  C'est normal : l'installateur n'est pas signé avec un
+  certificat payant. Clique sur "Informations complémentaires"
+  puis "Exécuter quand même".
+
+
+----------------------------------------------------------
+A RETENIR
+----------------------------------------------------------
+  1. Modifier le code
+  2. Mettre la même version dans les 3 fichiers
+  3. git add / commit / push
+  4. git tag vX.Y.Z + git push origin vX.Y.Z
+  5. Attendre le vert sur la page Actions
+  6. PUBLIER la release brouillon  <-- le plus souvent oublié
+
+Sans l'étape 6, personne ne peut télécharger la nouvelle
+version.

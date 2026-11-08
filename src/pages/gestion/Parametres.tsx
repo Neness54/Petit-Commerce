@@ -5,6 +5,14 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { closeDb, exec, q } from "../../lib/db";
 import { sha256Hex } from "../../lib/sha256";
 import { useSettings } from "../../lib/settingsContext";
+import {
+  phoneInfo,
+  phoneNewCode,
+  phoneRevoke,
+  phoneStart,
+  phoneStop,
+  type PhoneInfo,
+} from "../../lib/phoneScanner";
 import { Bouton, Champ, inputCls } from "../../components/Modal";
 
 const DEVISES = [
@@ -40,6 +48,62 @@ export default function Parametres() {
   const [entMail, setEntMail] = useState("");
   const [entSiret, setEntSiret] = useState("");
   const [entLogo, setEntLogo] = useState("");
+
+  // Scanner téléphone
+  const [tel, setTel] = useState<PhoneInfo | null>(null);
+  const [telEnCours, setTelEnCours] = useState(false);
+
+  useEffect(() => {
+    phoneInfo().then(setTel).catch(() => {});
+  }, []);
+
+  // Compte à rebours du code d'appairage
+  useEffect(() => {
+    if (!tel?.running) return;
+    const t = setInterval(() => {
+      setTel((p) =>
+        p && p.running
+          ? { ...p, secondsLeft: Math.max(0, p.secondsLeft - 1) }
+          : p,
+      );
+    }, 1000);
+    return () => clearInterval(t);
+  }, [tel?.running]);
+
+  async function basculerScanner() {
+    setTelEnCours(true);
+    try {
+      const inf = tel?.running ? await phoneStop() : await phoneStart();
+      setTel(inf);
+    } catch (e) {
+      setInfo(`Scanner téléphone : ${e}`);
+    } finally {
+      setTelEnCours(false);
+    }
+  }
+
+  async function nouveauCodeTel() {
+    try {
+      setTel(await phoneNewCode());
+    } catch (e) {
+      setInfo(`Code : ${e}`);
+    }
+  }
+
+  async function deconnecterTel(token: string) {
+    try {
+      setTel(await phoneRevoke(token));
+      setInfo("Téléphone déconnecté.");
+    } catch (e) {
+      setInfo(`Déconnexion : ${e}`);
+    }
+  }
+
+  function mmss(sec: number) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
 
   useEffect(() => {
     setNom(get("nom_commerce", "Mon Commerce"));
@@ -218,6 +282,111 @@ export default function Parametres() {
             {info}
           </p>
         )}
+
+        {/* Scanner téléphone */}
+        <section className="bg-white rounded-xl border p-4 space-y-3">
+          <h3 className="font-semibold">📱 Scanner avec le téléphone</h3>
+          <p className="text-sm text-slate-500">
+            Le téléphone se connecte au même réseau WiFi que cet ordinateur, puis scanne
+            les étiquettes : les produits s'ajoutent directement au panier de la caisse.
+          </p>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-medium">Serveur local</span>
+              <span className="text-slate-500">
+                {" "}
+                — {tel?.running ? "actif" : "désactivé"}
+              </span>
+            </div>
+            <Bouton
+              variante={tel?.running ? "danger" : "succes"}
+              onClick={basculerScanner}
+              disabled={telEnCours}
+            >
+              {telEnCours
+                ? "…"
+                : tel?.running
+                  ? "Désactiver"
+                  : "Activer le scanner"}
+            </Bouton>
+          </div>
+
+          {tel?.running && (
+            <>
+              <div className="flex gap-4 items-start flex-wrap">
+                <div className="w-44 h-44 border rounded-lg bg-white p-2 [&>svg]:w-full [&>svg]:h-full">
+                  {tel.qrSvg ? (
+                    <div dangerouslySetInnerHTML={{ __html: tel.qrSvg }} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-slate-400 text-center">
+                      QR indisponible
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-52 space-y-2">
+                  <div>
+                    <div className="text-xs uppercase text-slate-500">Adresse</div>
+                    <div className="font-mono text-sm bg-slate-50 border rounded px-2 py-1">
+                      {tel.url}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase text-slate-500">
+                      Code d'appairage
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold tracking-[0.3em]">
+                        {tel.code}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {tel.secondsLeft > 0
+                          ? `expire dans ${mmss(tel.secondsLeft)}`
+                          : "expiré"}
+                      </span>
+                    </div>
+                  </div>
+                  <Bouton variante="discret" onClick={nouveauCodeTel}>
+                    Nouveau code
+                  </Bouton>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Scanne le QR code (ou tape l'adresse) puis saisis le code sur le téléphone.
+                Au premier lancement, Windows peut demander d'autoriser l'application sur
+                le réseau privé : accepte.
+              </p>
+
+              <div>
+                <div className="text-xs uppercase text-slate-500 mb-1">
+                  Téléphones connectés
+                </div>
+                {tel.appareils.length === 0 ? (
+                  <p className="text-sm text-slate-400">Aucun appareil appairé.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {tel.appareils.map((a) => (
+                      <li
+                        key={a.token}
+                        className="flex items-center justify-between gap-2 text-sm bg-slate-50 border rounded px-2 py-1"
+                      >
+                        <span>📱 {a.nom}</span>
+                        <button
+                          className="text-red-600 hover:underline text-xs"
+                          onClick={() => deconnecterTel(a.token)}
+                        >
+                          Déconnecter
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </section>
 
         {/* Infos entreprise pour factures */}
         <section className="bg-white rounded-xl border p-4 space-y-3">

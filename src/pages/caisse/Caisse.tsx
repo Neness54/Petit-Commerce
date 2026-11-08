@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { q, tx, CLIENTS_AVEC_DETTE, type Stmt } from "../../lib/db";
 import { fmtMoney, fmtNum } from "../../lib/format";
 import { useSettings } from "../../lib/settingsContext";
+import { phoneScanReply, phoneSetPanier, onPhoneScan } from "../../lib/phoneScanner";
 import type { Client, Produit } from "../../lib/types";
 import { Bouton, Champ, inputCls } from "../../components/Modal";
 import ImpressionVente from "./ImpressionVente";
@@ -50,6 +52,16 @@ export default function Caisse({ onAllerClients }: { onAllerClients: () => void 
     () => panier.reduce((s, l) => s + l.qte * l.produit.prix_vente, 0),
     [panier],
   );
+
+  // Miroir du panier pour les callbacks du scanner téléphone
+  const panierRef = useRef<LignePanier[]>([]);
+  useEffect(() => {
+    panierRef.current = panier;
+  }, [panier]);
+
+  const totalDe = (pan: LignePanier[]) =>
+    pan.reduce((s, l) => s + l.qte * l.produit.prix_vente, 0);
+  const articlesDe = (pan: LignePanier[]) => pan.reduce((s, l) => s + l.qte, 0);
   const montantRecuSaisi =
     recu.trim() === "" ? null : parseFloat(recu.replace(",", ".")) || 0;
   // En espèces, un montant vide signifie « comptant exact »
@@ -68,25 +80,99 @@ export default function Caisse({ onAllerClients }: { onAllerClients: () => void 
       .slice(0, 60);
   }, [recherche, produits]);
 
-  function ajouterProduit(p: Produit) {
+  /** Ajoute un produit au panier et renvoie le résultat (utilisé par le scan téléphone) */
+  function ajouterAuPanier(p: Produit): {
+    ok: boolean;
+    message: string;
+    total: number;
+    articles: number;
+  } {
+    const pan = panierRef.current;
+    const i = pan.findIndex((l) => l.produit.id === p.id);
+    const dejaQte = i >= 0 ? pan[i].qte : 0;
+    if (dejaQte + 1 > p.stock) {
+      const message = `Stock insuffisant pour « ${p.nom} » (disponible : ${fmtNum(p.stock)})`;
+      setErreur(message);
+      scanRef.current?.focus();
+      return {
+        ok: false,
+        message,
+        total: totalDe(pan),
+        articles: articlesDe(pan),
+      };
+    }
+    const nouveau =
+      i >= 0
+        ? pan.map((l, idx) => (idx === i ? { ...l, qte: l.qte + 1 } : l))
+        : [...pan, { produit: p, qte: 1 }];
+    panierRef.current = nouveau;
+    setPanier(nouveau);
     setErreur(null);
-    setPanier((pan) => {
-      const i = pan.findIndex((l) => l.produit.id === p.id);
-      const dejaQte = i >= 0 ? pan[i].qte : 0;
-      if (dejaQte + 1 > p.stock) {
-        setErreur(`Stock insuffisant pour « ${p.nom} » (disponible : ${fmtNum(p.stock)})`);
-        return pan;
-      }
-      if (i >= 0) {
-        const copie = [...pan];
-        copie[i] = { ...copie[i], qte: copie[i].qte + 1 };
-        return copie;
-      }
-      return [...pan, { produit: p, qte: 1 }];
-    });
     setRecherche("");
     scanRef.current?.focus();
+    return {
+      ok: true,
+      message: `${p.nom} ajouté`,
+      total: totalDe(nouveau),
+      articles: articlesDe(nouveau),
+    };
   }
+
+  function ajouterProduit(p: Produit) {
+    ajouterAuPanier(p);
+  }
+
+  // Le téléphone voit le total du panier en cours
+  useEffect(() => {
+    phoneSetPanier(total, panier.reduce((s, l) => s + l.qte, 0));
+  }, [panier, total]);
+
+  // Scan envoyé depuis le téléphone (même chemin que le scanner USB)
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let annule = false;
+
+    onPhoneScan(async ({ requestId, code }) => {
+      const rechercheCode = (code ?? "").trim().toLowerCase();
+      const produit = produits.find(
+        (p) => (p.code_barres ?? "").toLowerCase() === rechercheCode,
+      );
+
+      if (!produit) {
+        await phoneScanReply({
+          requestId,
+          ok: false,
+          message: "Produit non reconnu",
+          nom: null,
+          prix: null,
+          total: totalDe(panierRef.current),
+          articles: articlesDe(panierRef.current),
+        });
+        return;
+      }
+
+      const r = ajouterAuPanier(produit);
+      await phoneScanReply({
+        requestId,
+        ok: r.ok,
+        message: r.message,
+        nom: produit.nom,
+        prix: produit.prix_vente,
+        total: r.total,
+        articles: r.articles,
+      });
+    })
+      .then((un) => {
+        if (annule) un();
+        else unlisten = un;
+      })
+      .catch(() => {});
+
+    return () => {
+      annule = true;
+      unlisten?.();
+    };
+  }, [produits]);
 
   function changerQte(idx: number, qte: number) {
     setPanier((pan) => {

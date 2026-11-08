@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Sécurité basique
+<FilesMatch "^(config\.php|README\.md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+Options -Indexes

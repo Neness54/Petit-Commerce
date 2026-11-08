@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Petit Commerce",
+  "productName": "Ness.AML.DEV",
   "version": "0.1.0",
   "identifier": "com.petitcommerce.app",
   "build": {
