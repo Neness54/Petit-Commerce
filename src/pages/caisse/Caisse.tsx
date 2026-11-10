@@ -3,7 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { q, tx, CLIENTS_AVEC_DETTE, type Stmt } from "../../lib/db";
 import { fmtMoney, fmtNum } from "../../lib/format";
 import { useSettings } from "../../lib/settingsContext";
-import { phoneScanReply, phoneSetPanier, onPhoneScan } from "../../lib/phoneScanner";
+import {
+  phoneScanReply,
+  phoneSetPanier,
+  onPhoneScan,
+  onVentesModifiees,
+} from "../../lib/phoneScanner";
 import type { Client, Produit } from "../../lib/types";
 import { Bouton, Champ, inputCls } from "../../components/Modal";
 import ImpressionVente from "./ImpressionVente";
@@ -126,6 +131,25 @@ export default function Caisse({ onAllerClients }: { onAllerClients: () => void 
   useEffect(() => {
     phoneSetPanier(total, panier.reduce((s, l) => s + l.qte, 0));
   }, [panier, total]);
+
+  // Vente ou client ajouté depuis l'app iPhone : recharge le stock et les dettes
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let annule = false;
+    onVentesModifiees(() => {
+      chargerProduits();
+      chargerClients();
+    })
+      .then((un) => {
+        if (annule) un();
+        else unlisten = un;
+      })
+      .catch(() => {});
+    return () => {
+      annule = true;
+      unlisten?.();
+    };
+  }, []);
 
   // Scan envoyé depuis le téléphone (même chemin que le scanner USB)
   useEffect(() => {

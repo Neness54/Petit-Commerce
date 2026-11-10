@@ -50,6 +50,10 @@ export const phoneScanReply = (reply: ScanReply & { requestId: string }) =>
     articles: reply.articles,
   }).catch(() => {});
 
+/** Prévient quand l'app iPhone a enregistré une vente ou un nouveau client */
+export const onVentesModifiees = (handler: () => void): Promise<UnlistenFn> =>
+  listen("ventes-modifiees", () => handler());
+
 /** Écoute les scans provenant du téléphone */
 export const onPhoneScan = (
   handler: (req: PhoneScanRequest) => void,

@@ -289,6 +289,8 @@ export default function Parametres() {
           <p className="text-sm text-slate-500">
             Le téléphone se connecte au même réseau WiFi que cet ordinateur, puis scanne
             les étiquettes : les produits s'ajoutent directement au panier de la caisse.
+            L'app iPhone Petit Commerce peut aussi servir de caisse : saisissez-y
+            l'adresse et le code d'appairage ci-dessous.
           </p>
 
           <div className="flex items-center justify-between gap-3">
