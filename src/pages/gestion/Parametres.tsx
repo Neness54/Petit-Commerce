@@ -290,6 +290,12 @@ export default function Parametres() {
             Le téléphone se connecte au même réseau WiFi que cet ordinateur, puis scanne
             les étiquettes : les produits s'ajoutent directement au panier de la caisse.
           </p>
+          <p className="text-sm text-slate-500">
+            L'app iPhone peut aussi servir de <strong>caisse complète</strong> : pour
+            l'installer, utilise l'adresse et le code d'appairage affichés ci-dessous.
+            Les ventes enregistrées depuis le téléphone apparaissent ici et le stock est
+            mis à jour automatiquement.
+          </p>
 
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm">

@@ -48,6 +48,13 @@ Application de caisse et de gestion de stock hors-ligne, pensée pour les petits
 - Sauvegarde / restauration de la base de données
 - Vidage de l'historique des ventes
 
+### 📱 Téléphone (scanner + caisse mobile)
+- Serveur local sur le même réseau WiFi, aucun cloud
+- Appairage par **QR code** + **code à 6 chiffres** affiché sur le PC
+- Le téléphone scanne les étiquettes : les produits s'ajoutent au panier du PC
+- L'app iPhone peut servir de **caisse complète** (produits, clients, encaissement, crédit)
+- Synchronisation immédiate : le PC voit les ventes et le stock est mis à jour
+
 ## Prérequis
 
 - [Node.js](https://nodejs.org/) (LTS recommandé)
@@ -62,18 +69,28 @@ npm install
 
 # Lancer en mode développement
 npm run tauri dev
-Build pour installation
+```
+
+## Build pour installation
+
+```bash
 # Générer l'installateur
 npm run tauri build
-Les fichiers générés se trouvent dans :  
-src-tauri/target/release/bundle/  
-(.msi, .exe sous Windows / .AppImage, .deb sous Linux)
-Données & fichiers
-Fichier	Emplacement	Description
-Base de données	~/.config/com.petitcommerce.app/petit-commerce.db	Toutes les ventes, stocks, clients, paramètres
-Fichiers WAL/SHM	Même dossier	Fichiers temporaires SQLite (automatiques)
+```
+
+Les fichiers générés se trouvent dans `src-tauri/target/release/bundle/`
+(`.msi`, `.exe` sous Windows / `.AppImage`, `.deb` sous Linux).
+
+## Données & fichiers
+
+| Fichier | Emplacement | Description |
+|---|---|---|
+| Base de données | `~/.config/com.petitcommerce.app/petit-commerce.db` | Toutes les ventes, stocks, clients, paramètres |
+| Fichiers WAL/SHM | Même dossier | Fichiers temporaires SQLite (automatiques) |
+
 En cas de restauration, l'application redémarre automatiquement après remplacement de la base.
-Astuces d'utilisation
+
+## Astuces d'utilisation
 - Scan rapide : depuis l'écran Caisse, utilise directement le champ "Scannez un code-barres ou tapez un nom..." avec ton lecteur de codes-barres.
 - Lots vendus à la pièce : un lot pesé (ex. 1,53 kg) se vend obligatoirement en pièce entière.
 - Étiquettes : à la création d'un lot, les étiquettes s'ouvrent automatiquement. Possibilité de réimprimer depuis Stock & lots ou depuis l'historique.

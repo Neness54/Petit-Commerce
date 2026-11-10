@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { q, tx, CLIENTS_AVEC_DETTE, type Stmt } from "../../lib/db";
 import { fmtMoney, fmtNum } from "../../lib/format";
 import { useSettings } from "../../lib/settingsContext";
@@ -173,6 +174,25 @@ export default function Caisse({ onAllerClients }: { onAllerClients: () => void 
       unlisten?.();
     };
   }, [produits]);
+
+  // Une vente ou un client créé depuis l'app iPhone : on rafraîchit les données
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let annule = false;
+    listen("ventes-modifiees", () => {
+      chargerProduits();
+      chargerClients();
+    })
+      .then((un) => {
+        if (annule) un();
+        else unlisten = un;
+      })
+      .catch(() => {});
+    return () => {
+      annule = true;
+      unlisten?.();
+    };
+  }, []);
 
   function changerQte(idx: number, qte: number) {
     setPanier((pan) => {

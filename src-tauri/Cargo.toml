@@ -1,6 +1,6 @@
 [package]
 name = "petit-commerce"
-version = "0.1.0"
+version = "1.1.0"
 description = "Application de gestion de stock et de vente pour petit commerce"
 edition = "2021"
 rust-version = "1.77.2"

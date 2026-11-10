@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod db;
 mod phone_server;
 
 /// Chemin du fichier de base de données
@@ -124,6 +125,12 @@ pub fn run() {
             version: 6,
             description: "entreprise_facture",
             sql: include_str!("../migrations/006_entreprise_facture.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "appareils_mobiles",
+            sql: include_str!("../migrations/007_appareils_mobiles.sql"),
             kind: MigrationKind::Up,
         },
     ];
