@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State as TauriState};
 use tokio::sync::oneshot;
 
+use crate::mobile_api;
+
 /// Port d'écoute du serveur local
 pub const PORT: u16 = 8787;
 /// Durée de validité du code d'appairage (secondes)
@@ -117,6 +119,25 @@ impl PhoneState {
             nom,
         });
         token
+    }
+
+    /// Appareil correspondant au jeton, s'il est autorisé
+    pub(crate) fn appareil(&self, token: &str) -> Option<Appareil> {
+        if token.is_empty() {
+            return None;
+        }
+        let inner = self.inner.lock().unwrap();
+        inner.appareils.iter().find(|a| a.token == token).cloned()
+    }
+
+    /// Ajoute les appareils enregistrés dans la base (sans doublon)
+    fn ajouter_appareils(&self, appareils: Vec<Appareil>) {
+        let mut inner = self.inner.lock().unwrap();
+        for a in appareils {
+            if !inner.appareils.iter().any(|x| x.token == a.token) {
+                inner.appareils.push(a);
+            }
+        }
     }
 
     fn is_authorized(&self, token: &str) -> bool {
@@ -245,12 +266,12 @@ fn build_info(server: &PhoneServer) -> PhoneInfo {
 }
 
 #[derive(Clone)]
-struct Ctx {
-    app: AppHandle,
-    phone: Arc<PhoneState>,
+pub(crate) struct Ctx {
+    pub(crate) app: AppHandle,
+    pub(crate) phone: Arc<PhoneState>,
 }
 
-fn bearer(headers: &HeaderMap) -> String {
+pub(crate) fn bearer(headers: &HeaderMap) -> String {
     headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -337,8 +358,20 @@ async fn pair(State(ctx): State<Ctx>, Json(req): Json<PairReq>) -> Json<PairRes>
             erreur: Some("Code invalide ou expiré".into()),
         });
     }
-    let nom = req.nom.unwrap_or_else(|| "Téléphone".into());
-    let token = ctx.phone.issue_token(nom);
+    let nom = req
+        .nom
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "Téléphone".into());
+    let token = ctx.phone.issue_token(nom.clone());
+    // L'appareil reste autorisé après un redémarrage du logiciel
+    let appareil = Appareil {
+        token: token.clone(),
+        nom,
+    };
+    if let Err(e) = mobile_api::enregistrer_appareil(&ctx.app, &appareil).await {
+        eprintln!("[scanner] appareil non enregistré : {e}");
+    }
     Json(PairRes {
         ok: true,
         token: Some(token),
@@ -431,7 +464,11 @@ async fn etat(State(ctx): State<Ctx>, headers: HeaderMap) -> (StatusCode, Json<E
 }
 
 async fn unpair(State(ctx): State<Ctx>, headers: HeaderMap) -> StatusCode {
-    ctx.phone.revoke(&bearer(&headers));
+    let token = bearer(&headers);
+    ctx.phone.revoke(&token);
+    if !token.is_empty() {
+        let _ = mobile_api::supprimer_appareil(&ctx.app, &token).await;
+    }
     StatusCode::OK
 }
 
@@ -451,6 +488,12 @@ async fn serve(
         .route("/api/scan", post(scan))
         .route("/api/etat", get(etat))
         .route("/api/unpair", post(unpair))
+        // Caisse mobile (app iPhone)
+        .route("/api/session", get(mobile_api::session))
+        .route("/api/produits", get(mobile_api::produits))
+        .route("/api/clients", get(mobile_api::clients).post(mobile_api::creer_client))
+        .route("/api/ventes", get(mobile_api::ventes).post(mobile_api::creer_vente))
+        .route("/api/statistiques", get(mobile_api::statistiques))
         .with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", PORT))
@@ -492,6 +535,12 @@ pub async fn start(app: AppHandle, srv: Arc<PhoneServer>) -> Result<PhoneInfo, S
     {
         let mut r = srv.running.lock().unwrap();
         *r = true;
+    }
+
+    // Appareils déjà appairés (enregistrés dans la base)
+    match mobile_api::charger_appareils(&app).await {
+        Ok(appareils) => srv.state.ajouter_appareils(appareils),
+        Err(e) => eprintln!("[scanner] appareils non chargés : {e}"),
     }
 
     let state = srv.state.clone();
@@ -545,11 +594,17 @@ pub fn phone_new_code(server: TauriState<'_, Arc<PhoneServer>>) -> PhoneInfo {
 
 #[tauri::command]
 pub fn phone_revoke(
+    app: AppHandle,
     token: String,
     server: TauriState<'_, Arc<PhoneServer>>,
 ) -> PhoneInfo {
     let srv = server.inner().clone();
     srv.state.revoke(&token);
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = mobile_api::supprimer_appareil(&app, &token).await {
+            eprintln!("[scanner] appareil non supprimé : {e}");
+        }
+    });
     build_info(&srv)
 }
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod mobile_api;
 mod phone_server;
 
 /// Chemin du fichier de base de données
